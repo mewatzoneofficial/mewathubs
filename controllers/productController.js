@@ -81,28 +81,49 @@ export const getRecordById = async (req, res) => {
 };
 
 export const createRecord = async (req, res) => {
-  const { name, mobile, email, official_email, official_mobile, password, dob, joining_date, gender } = req.body;
-
+ console.log("req.body:", req.body);
+  if (!req.body) {
+    return res.status(400).json({ error: "Request body is missing" });
+  }
+  const {
+    name,
+    mobile,
+    email,
+    official_email,
+    official_mobile,
+    password,
+    dob,
+    joining_date,
+    gender,
+  } = req.body;
+  // Uploaded image is in req.file
+  const image = req.file ? req.file.filename : null;
   if (!name || !email || !mobile || !password) {
-    return errorResponse(res, "Name, email, mobile, and password are required", 400);
+    return errorResponse(
+      res,
+      "Name, email, mobile, and password are required",
+      400
+    );
   }
 
   try {
-    const existing = await runQuery(
-      "SELECT adminID FROM admin WHERE email = ? OR mobile = ?", 
-      [email, mobile]
-    );
-    if (result.affectedRows === 0) {
-      return errorResponse(res, "Email or mobile already exists", 400);
-    }
+    // ✅ Check if email or mobile already exists
+    // const existing = await runQuery(
+    //   "SELECT adminID FROM admin WHERE email = ? OR mobile = ?",
+    //   [email, mobile]
+    // );
+
+    // if (existing.length > 0) {
+    //   return errorResponse(res, "Email or mobile already exists", 400);
+    // }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await runQuery(
       `INSERT INTO admin 
-       (name, email, mobile, password, official_email, official_mobile, dob, joining_date, gender)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, mobile, hashedPassword, official_email || null, official_mobile || null, dob || null, joining_date || null, gender || null]
+       (name, email, mobile, password, official_email, official_mobile, dob, joining_date, gender, image)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name, email, mobile, hashedPassword, official_email || null, official_mobile || null, dob || null, joining_date || null, gender || null, image || null,]
     );
 
     return successResponse(res, "Admin created successfully", { adminID: result.insertId });

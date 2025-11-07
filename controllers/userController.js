@@ -1,5 +1,9 @@
 import bcrypt from "bcrypt";
-import { runQuery, successResponse, errorResponse } from "../utils/commonFunctions.js";
+import {
+  runQuery,
+  successResponse,
+  errorResponse,
+} from "../utils/commonFunctions.js";
 
 // Get all admins
 export const getAllRecords = async (req, res) => {
@@ -34,7 +38,9 @@ export const getAllRecords = async (req, res) => {
       params.push(`%${filters.mobile}%`, `%${filters.mobile}%`);
     }
 
-    const whereClause = whereClauses.length ? "WHERE " + whereClauses.join(" AND ") : "";
+    const whereClause = whereClauses.length
+      ? "WHERE " + whereClauses.join(" AND ")
+      : "";
     const sqlQuery = `
       SELECT adminID, name, mobile, email, official_email, official_mobile, image, dob, joining_date,
        gender, created_at FROM admin
@@ -46,7 +52,9 @@ export const getAllRecords = async (req, res) => {
     // Get total count
     const countQuery = `SELECT COUNT(*) AS total FROM admin ${whereClause}`;
     const countResult = await runQuery(countQuery, params);
-    const countRow = Array.isArray(countResult[0]) ? countResult[0][0] : countResult[0];
+    const countRow = Array.isArray(countResult[0])
+      ? countResult[0][0]
+      : countResult[0];
     const total = countRow?.total || 0;
 
     return successResponse(res, "Data fetched successfully", {
@@ -54,7 +62,7 @@ export const getAllRecords = async (req, res) => {
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      results, 
+      results,
     });
   } catch (err) {
     console.error(err);
@@ -69,7 +77,9 @@ export const getRecordById = async (req, res) => {
     return errorResponse(res, "Invalid admin ID", 400);
   }
   try {
-    const result = await runQuery("SELECT * FROM admin WHERE adminID = ?", [id]);
+    const result = await runQuery("SELECT * FROM admin WHERE adminID = ?", [
+      id,
+    ]);
     if (result.length === 0) {
       return errorResponse(res, "User not found", 404);
     }
@@ -81,37 +91,71 @@ export const getRecordById = async (req, res) => {
 };
 
 export const createRecord = async (req, res) => {
-  const { name, mobile, email, official_email, official_mobile, password, dob, joining_date, gender } = req.body;
-
+  console.log("req.body:", req.body);
+  // Ensure req.body exists
+  if (!req.body) {
+    return res.status(400).json({ error: "Request body is missing" });
+  }
+  const {
+    name,
+    mobile,
+    email,
+    official_email,
+    official_mobile,
+    password,
+    dob,
+    joining_date,
+    gender,
+  } = req.body;
+  // Uploaded image is in req.file
+  const image = req.file ? req.file.filename : null;
   if (!name || !email || !mobile || !password) {
-    return errorResponse(res, "Name, email, mobile, and password are required", 400);
+    return errorResponse(
+      res,
+      "Name, email, mobile, and password are required",
+      400
+    );
   }
 
   try {
-    const existing = await runQuery(
-      "SELECT adminID FROM admin WHERE email = ? OR mobile = ?", 
-      [email, mobile]
-    );
-    if (result.affectedRows === 0) {
-      return errorResponse(res, "Email or mobile already exists", 400);
-    }
+    // ✅ Check if email or mobile already exists
+    // const existing = await runQuery(
+    //   "SELECT adminID FROM admin WHERE email = ? OR mobile = ?",
+    //   [email, mobile]
+    // );
+
+    // if (existing.length > 0) {
+    //   return errorResponse(res, "Email or mobile already exists", 400);
+    // }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await runQuery(
       `INSERT INTO admin 
-       (name, email, mobile, password, official_email, official_mobile, dob, joining_date, gender)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, mobile, hashedPassword, official_email || null, official_mobile || null, dob || null, joining_date || null, gender || null]
+       (name, email, mobile, password, official_email, official_mobile, dob, joining_date, gender, image)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        name,
+        email,
+        mobile,
+        hashedPassword,
+        official_email || null,
+        official_mobile || null,
+        dob || null,
+        joining_date || null,
+        gender || null,
+        image || null,
+      ]
     );
 
-    return successResponse(res, "Admin created successfully", { adminID: result.insertId });
+    return successResponse(res, "Admin created successfully", {
+      adminID: result.insertId,
+    });
   } catch (err) {
     console.error("Error creating admin:", err);
     return errorResponse(res, "Error creating admin", 500);
   }
 };
-
 
 // Update admin by ID
 export const updateRecord = async (req, res) => {
@@ -119,7 +163,11 @@ export const updateRecord = async (req, res) => {
   const { name, email, mobile } = req.body;
 
   if (!name || !email || !mobile) {
-    return errorResponse(res, "Name, email, and mobile are required to update", 400);
+    return errorResponse(
+      res,
+      "Name, email, and mobile are required to update",
+      400
+    );
   }
 
   try {
@@ -132,7 +180,12 @@ export const updateRecord = async (req, res) => {
       return errorResponse(res, "Admin not found", 404);
     }
 
-    return successResponse(res, "User Updated successfully" , { id, name, email, mobile });
+    return successResponse(res, "User Updated successfully", {
+      id,
+      name,
+      email,
+      mobile,
+    });
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
