@@ -1,19 +1,17 @@
 import express from "express";
 import {
   getAllRecords,
-  createRecord,
-  getRecordById,
-  updateRecord,
+  createOrUpdateRecord,
   deleteRecord,
+  clearRecord,
 } from "../controllers/cartController.js";
 
 const router = express.Router();
 
-router.get("/", getAllRecords);
-router.post("/", createRecord);
-router.get("/:id", getRecordById);
-router.put("/:id", updateRecord);
-router.delete("/:id", deleteRecord);
+router.get("/:user_id", getAllRecords);
+router.post("/:user_id", createOrUpdateRecord);
+
+router.delete("/:user_id/:id", deleteRecord);
+router.delete("/:user_id", clearRecord);
 
 export default router;
-

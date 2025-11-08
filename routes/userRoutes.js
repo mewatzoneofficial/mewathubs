@@ -9,10 +9,10 @@ import {
 } from "../controllers/userController.js";
 
 const router = express.Router();
-const upload = makeUploader("users");
+const fileUpload = makeUploader("users");
 
 router.get("/", getAllRecords);
-router.post("/", upload.single("image"), createRecord);
+router.post("/", fileUpload.single("image"), createRecord);
 router.get("/:id", getRecordById);
 router.put("/:id", updateRecord);
 router.delete("/:id", deleteRecord);

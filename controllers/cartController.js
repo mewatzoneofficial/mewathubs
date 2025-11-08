@@ -1,154 +1,107 @@
 import { runQuery, successResponse, errorResponse } from "../utils/commonFunctions.js";
 
-// Get all admins
+// ✅ Get all cart records for a specific user
 export const getAllRecords = async (req, res) => {
   try {
-    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
-    const offset = (page - 1) * limit;
-    const trimOrNull = (val) => (val?.trim() ? val.trim() : null);
+    const { user_id } = req.params;
 
-    const filters = {
-      name: trimOrNull(req.query.name),
-      email: trimOrNull(req.query.email),
-      mobile: trimOrNull(req.query.mobile),
-    };
-
-    // Build WHERE clause dynamically
-    const whereClauses = [];
-    const params = [];
-
-    if (filters.name) {
-      whereClauses.push("name LIKE ?");
-      params.push(`%${filters.name}%`);
+    if (!user_id || isNaN(user_id)) {
+      return errorResponse(res, "Invalid or missing user_id", 400);
     }
 
-    if (filters.email) {
-      whereClauses.push("(email LIKE ? OR official_email LIKE ?)");
-      params.push(`%${filters.email}%`, `%${filters.email}%`);
-    }
-
-    if (filters.mobile) {
-      whereClauses.push("(mobile LIKE ? OR official_mobile LIKE ?)");
-      params.push(`%${filters.mobile}%`, `%${filters.mobile}%`);
-    }
-
-    const whereClause = whereClauses.length ? "WHERE " + whereClauses.join(" AND ") : "";
     const sqlQuery = `
-      SELECT adminID, name, mobile, email, official_email, official_mobile, image, dob, joining_date,
-       gender, created_at FROM admin
-      ${whereClause}
-      ORDER BY adminID DESC LIMIT ? OFFSET ?`;
+      SELECT id, user_id, product_id, qty, created_at, updated_at
+      FROM carts
+      WHERE user_id = ?
+      ORDER BY id DESC
+    `;
 
-    const [results] = await runQuery(sqlQuery, [...params, limit, offset]);
+    const [results] = await runQuery(sqlQuery, [user_id]);
 
-    // Get total count
-    const countQuery = `SELECT COUNT(*) AS total FROM admin ${whereClause}`;
-    const countResult = await runQuery(countQuery, params);
-    const countRow = Array.isArray(countResult[0]) ? countResult[0][0] : countResult[0];
-    const total = countRow?.total || 0;
-
-    return successResponse(res, "Data fetched successfully", {
-      page,
-      limit,
-      total,
-      totalPages: Math.ceil(total / limit),
-      results, 
-    });
+    return successResponse(res, "Carts fetched successfully", results);
   } catch (err) {
-    console.error(err);
+    console.error("Error fetching carts:", err);
     return errorResponse(res, err.message, 500);
   }
 };
 
-// Get admin by ID
-export const getRecordById = async (req, res) => {
-  const { id } = req.params;
-  if (!id || isNaN(id)) {
-    return errorResponse(res, "Invalid admin ID", 400);
-  }
-  try {
-    const result = await runQuery("SELECT * FROM admin WHERE adminID = ?", [id]);
-    if (result.length === 0) {
-      return errorResponse(res, "User not found", 404);
-    }
+// ✅ Create new cart record for a specific user
+export const createOrUpdateRecord = async (req, res) => {
+  const { user_id } = req.params;
+  const { product_id, qty } = req.body;
 
-    return successResponse(res, "Data fetched successfully", result[0]);
-  } catch (err) {
-    return errorResponse(res, err.message, 500);
-  }
-};
-
-export const createRecord = async (req, res) => {
-  const { name, mobile, email, official_email, official_mobile, password, dob, joining_date, gender } = req.body;
-
-  if (!name || !email || !mobile || !password) {
-    return errorResponse(res, "Name, email, mobile, and password are required", 400);
-  }
+  if (!user_id || isNaN(user_id)) return errorResponse(res, "Invalid user_id", 400);
+  if (!product_id || !qty)
+    return errorResponse(res, "product_id and qty are required", 400);
 
   try {
-    const existing = await runQuery(
-      "SELECT adminID FROM admin WHERE email = ? OR mobile = ?", 
-      [email, mobile]
+    // Check if product already in cart
+    const [existing] = await runQuery(
+      "SELECT id, qty FROM carts WHERE user_id = ? AND product_id = ?",
+      [user_id, product_id]
     );
-    if (result.affectedRows === 0) {
-      return errorResponse(res, "Email or mobile already exists", 400);
+
+    if (existing.length > 0) {
+      // Update qty if exists
+      const cart = existing[0];
+      const newQty = cart.qty + qty;
+      await runQuery(
+        "UPDATE carts SET qty = ?, updated_at = NOW() WHERE id = ?",
+        [newQty, cart.id]
+      );
+
+      return successResponse(res, "Cart updated successfully", { id: cart.id, qty: newQty });
     }
 
+    // Else create new record
     const [result] = await runQuery(
-      `INSERT INTO admin 
-       (name, email, mobile, official_email, official_mobile, dob, joining_date, gender)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, mobile, official_email || null, official_mobile || null, dob || null, joining_date || null, gender || null]
+      "INSERT INTO carts (user_id, product_id, qty, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())",
+      [user_id, product_id, qty]
     );
 
-    return successResponse(res, "Admin created successfully", { adminID: result.insertId });
+    return successResponse(res, "Cart created successfully", { id: result.insertId });
   } catch (err) {
-    console.error("Error creating admin:", err);
-    return errorResponse(res, "Error creating admin", 500);
-  }
-};
-
-
-// Update admin by ID
-export const updateRecord = async (req, res) => {
-  const { id } = req.params;
-  const { name, email, mobile } = req.body;
-
-  if (!name || !email || !mobile) {
-    return errorResponse(res, "Name, email, and mobile are required to update", 400);
-  }
-
-  try {
-    const result = await runQuery(
-      "UPDATE admin SET name = ?, email = ?, mobile = ? WHERE adminID = ?",
-      [name, email, mobile, id]
-    );
-
-    if (result.affectedRows === 0) {
-      return errorResponse(res, "Admin not found", 404);
-    }
-
-    return successResponse(res, "User Updated successfully" , { id, name, email, mobile });
-  } catch (err) {
+    console.error("Error creating cart:", err);
     return errorResponse(res, err.message, 500);
   }
 };
 
-// Delete admin by ID
+
+// ✅ Delete a single cart record for a specific user
 export const deleteRecord = async (req, res) => {
-  const { id } = req.params;
-  console.log("Deleting admin with ID:", id);
+  const { user_id, id } = req.params;
+
+  if (!user_id || isNaN(user_id)) return errorResponse(res, "Invalid user_id", 400);
+  if (!id || isNaN(id)) return errorResponse(res, "Invalid cart ID", 400);
 
   try {
-    const result = await runQuery("DELETE FROM admin WHERE adminID = ?", [id]);
+    const [result] = await runQuery("DELETE FROM carts WHERE id = ? AND user_id = ?", [id, user_id]);
+    if (result.affectedRows === 0)
+      return errorResponse(res, "Cart not found for this user", 404);
 
-    if (result.affectedRows === 0) {
-      return errorResponse(res, "Admin not found", 404);
-    }
-
-    return successResponse(res, { message: "User deleted successfully" });
+    return successResponse(res, "Cart deleted successfully");
   } catch (err) {
+    console.error("Error deleting cart:", err);
+    return errorResponse(res, err.message, 500);
+  }
+};
+
+// ✅ Clear all carts for a specific user
+export const clearRecord = async (req, res) => {
+  const { user_id } = req.params;
+
+  if (!user_id || isNaN(user_id)) return errorResponse(res, "Invalid user_id", 400);
+
+  try {
+    const [result] = await runQuery("DELETE FROM carts WHERE user_id = ?", [user_id]);
+    return successResponse(
+      res,
+      result.affectedRows > 0
+        ? "All carts cleared successfully for this user"
+        : "No carts found for this user"
+    );
+  } catch (err) {
+    console.error("Error clearing carts:", err);
     return errorResponse(res, err.message, 500);
   }
 };

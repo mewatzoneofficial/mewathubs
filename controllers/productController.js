@@ -1,7 +1,6 @@
-import bcrypt from "bcrypt";
 import { runQuery, successResponse, errorResponse } from "../utils/commonFunctions.js";
 
-// Get all admins
+// Get all products
 export const getAllRecords = async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
@@ -11,11 +10,10 @@ export const getAllRecords = async (req, res) => {
 
     const filters = {
       name: trimOrNull(req.query.name),
-      email: trimOrNull(req.query.email),
-      mobile: trimOrNull(req.query.mobile),
+      category_id: req.query.category_id ? parseInt(req.query.category_id, 10) : null,
+      status: req.query.status ? parseInt(req.query.status, 10) : null,
     };
 
-    // Build WHERE clause dynamically
     const whereClauses = [];
     const params = [];
 
@@ -24,37 +22,39 @@ export const getAllRecords = async (req, res) => {
       params.push(`%${filters.name}%`);
     }
 
-    if (filters.email) {
-      whereClauses.push("(email LIKE ? OR official_email LIKE ?)");
-      params.push(`%${filters.email}%`, `%${filters.email}%`);
+    if (filters.category_id) {
+      whereClauses.push("category_id = ?");
+      params.push(filters.category_id);
     }
 
-    if (filters.mobile) {
-      whereClauses.push("(mobile LIKE ? OR official_mobile LIKE ?)");
-      params.push(`%${filters.mobile}%`, `%${filters.mobile}%`);
+    if (filters.status !== null) {
+      whereClauses.push("status = ?");
+      params.push(filters.status);
     }
 
     const whereClause = whereClauses.length ? "WHERE " + whereClauses.join(" AND ") : "";
+
     const sqlQuery = `
-      SELECT adminID, name, mobile, email, official_email, official_mobile, image, dob, joining_date,
-       gender, created_at FROM admin
+      SELECT id, category_id, name, description, price, discount_price, qty, image, status, created_at, updated_at
+      FROM products
       ${whereClause}
-      ORDER BY adminID DESC LIMIT ? OFFSET ?`;
+      ORDER BY id DESC
+      LIMIT ? OFFSET ?;
+    `;
 
     const [results] = await runQuery(sqlQuery, [...params, limit, offset]);
 
-    // Get total count
-    const countQuery = `SELECT COUNT(*) AS total FROM admin ${whereClause}`;
+    const countQuery = `SELECT COUNT(*) AS total FROM products ${whereClause}`;
     const countResult = await runQuery(countQuery, params);
     const countRow = Array.isArray(countResult[0]) ? countResult[0][0] : countResult[0];
     const total = countRow?.total || 0;
 
-    return successResponse(res, "Data fetched successfully", {
+    return successResponse(res, "Products fetched successfully", {
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      results, 
+      results,
     });
   } catch (err) {
     console.error(err);
@@ -62,116 +62,139 @@ export const getAllRecords = async (req, res) => {
   }
 };
 
-// Get admin by ID
+// Get product by ID
 export const getRecordById = async (req, res) => {
   const { id } = req.params;
   if (!id || isNaN(id)) {
-    return errorResponse(res, "Invalid admin ID", 400);
+    return errorResponse(res, "Invalid product ID", 400);
   }
   try {
-    const result = await runQuery("SELECT * FROM admin WHERE adminID = ?", [id]);
-    if (result.length === 0) {
-      return errorResponse(res, "User not found", 404);
+    const [result] = await runQuery("SELECT * FROM products WHERE id = ?", [id]);
+    if (!result.length) {
+      return errorResponse(res, "Product not found", 404);
     }
 
-    return successResponse(res, "Data fetched successfully", result[0]);
+    return successResponse(res, "Product fetched successfully", result[0]);
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
 };
 
+// Create a new product
 export const createRecord = async (req, res) => {
- console.log("req.body:", req.body);
-  if (!req.body) {
-    return res.status(400).json({ error: "Request body is missing" });
-  }
   const {
+    category_id,
     name,
-    mobile,
-    email,
-    official_email,
-    official_mobile,
-    password,
-    dob,
-    joining_date,
-    gender,
+    description,
+    price,
+    discount_price,
+    qty,
+    status,
   } = req.body;
-  // Uploaded image is in req.file
+
   const image = req.file ? req.file.filename : null;
-  if (!name || !email || !mobile || !password) {
-    return errorResponse(
-      res,
-      "Name, email, mobile, and password are required",
-      400
-    );
+
+  if (!name || !price || !category_id) {
+    return errorResponse(res, "Category ID, name, and price are required", 400);
   }
 
   try {
-    // ✅ Check if email or mobile already exists
-    // const existing = await runQuery(
-    //   "SELECT adminID FROM admin WHERE email = ? OR mobile = ?",
-    //   [email, mobile]
-    // );
-
-    // if (existing.length > 0) {
-    //   return errorResponse(res, "Email or mobile already exists", 400);
-    // }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     const [result] = await runQuery(
-      `INSERT INTO admin 
-       (name, email, mobile, password, official_email, official_mobile, dob, joining_date, gender, image)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, email, mobile, hashedPassword, official_email || null, official_mobile || null, dob || null, joining_date || null, gender || null, image || null,]
+      `INSERT INTO products 
+       (category_id, name, description, price, discount_price, qty, image, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [
+        category_id,
+        name,
+        description || null,
+        price,
+        discount_price || 0,
+        qty || 0,
+        image || null,
+        status ?? 1,
+      ]
     );
 
-    return successResponse(res, "Admin created successfully", { adminID: result.insertId });
+    return successResponse(res, "Product created successfully", { id: result.insertId });
   } catch (err) {
-    console.error("Error creating admin:", err);
-    return errorResponse(res, "Error creating admin", 500);
+    console.error("Error creating product:", err);
+    return errorResponse(res, "Error creating product", 500);
   }
 };
 
-
-// Update admin by ID
+// Update product by ID
 export const updateRecord = async (req, res) => {
   const { id } = req.params;
-  const { name, email, mobile } = req.body;
+  const {
+    category_id,
+    name,
+    description,
+    price,
+    discount_price,
+    qty,
+    status,
+  } = req.body;
+  const image = req.file ? req.file.filename : null;
 
-  if (!name || !email || !mobile) {
-    return errorResponse(res, "Name, email, and mobile are required to update", 400);
+  if (!id || isNaN(id)) {
+    return errorResponse(res, "Invalid product ID", 400);
   }
 
   try {
-    const result = await runQuery(
-      "UPDATE admin SET name = ?, email = ?, mobile = ? WHERE adminID = ?",
-      [name, email, mobile, id]
+    const [existing] = await runQuery("SELECT * FROM products WHERE id = ?", [id]);
+    if (!existing.length) {
+      return errorResponse(res, "Product not found", 404);
+    }
+
+    const [result] = await runQuery(
+      `UPDATE products SET 
+        category_id = ?, 
+        name = ?, 
+        description = ?, 
+        price = ?, 
+        discount_price = ?, 
+        qty = ?, 
+        image = COALESCE(?, image), 
+        status = ?, 
+        updated_at = NOW()
+      WHERE id = ?`,
+      [
+        category_id,
+        name,
+        description || null,
+        price,
+        discount_price || 0,
+        qty || 0,
+        image,
+        status ?? existing[0].status,
+        id,
+      ]
     );
 
     if (result.affectedRows === 0) {
-      return errorResponse(res, "Admin not found", 404);
+      return errorResponse(res, "No changes made to the product", 400);
     }
 
-    return successResponse(res, "User Updated successfully" , { id, name, email, mobile });
+    return successResponse(res, "Product updated successfully");
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
 };
 
-// Delete admin by ID
+// Delete product by ID
 export const deleteRecord = async (req, res) => {
   const { id } = req.params;
-  console.log("Deleting admin with ID:", id);
+  if (!id || isNaN(id)) {
+    return errorResponse(res, "Invalid product ID", 400);
+  }
 
   try {
-    const result = await runQuery("DELETE FROM admin WHERE adminID = ?", [id]);
-
+    const [result] = await runQuery("DELETE FROM products WHERE id = ?", [id]);
     if (result.affectedRows === 0) {
-      return errorResponse(res, "Admin not found", 404);
+      return errorResponse(res, "Product not found", 404);
     }
 
-    return successResponse(res, { message: "User deleted successfully" });
+    return successResponse(res, "Product deleted successfully");
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }

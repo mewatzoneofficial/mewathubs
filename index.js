@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 import userRoutes from "./routes/userRoutes.js";
+import categoryRoutes from "./routes/categoryRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
@@ -46,6 +47,7 @@ if (cluster.isPrimary && isProduction) {
     )
   );
   app.use("/api/users", userRoutes);
+  app.use("/api/categories", categoryRoutes);
   app.use("/api/products", productRoutes);
   app.use("/api/carts", cartRoutes);
   app.use("/api/orders", orderRoutes);
