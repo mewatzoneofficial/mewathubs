@@ -27,16 +27,10 @@ export const getAllRecords = async (req, res) => {
       params.push(filters.category_id);
     }
 
-    if (filters.status !== null) {
-      whereClauses.push("status = ?");
-      params.push(filters.status);
-    }
-
     const whereClause = whereClauses.length ? "WHERE " + whereClauses.join(" AND ") : "";
 
     const sqlQuery = `
-      SELECT id, category_id, name, description, price, discount_price, qty, image, status, created_at, updated_at
-      FROM products
+      SELECT id, category_id, name, description, price, discount_price, qty, image FROM products
       ${whereClause}
       ORDER BY id DESC
       LIMIT ? OFFSET ?;
@@ -49,12 +43,19 @@ export const getAllRecords = async (req, res) => {
     const countRow = Array.isArray(countResult[0]) ? countResult[0][0] : countResult[0];
     const total = countRow?.total || 0;
 
+    const baseImageUrl = process.env.IMAGE_BASE_URL;
+
+    const responseData = results.map((product) => ({
+      ...product,
+      image: product.image ? `${baseImageUrl}products/${product.image}` : null,
+    }));
+
     return successResponse(res, "Products fetched successfully", {
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      results,
+      responseData,
     });
   } catch (err) {
     console.error(err);
@@ -98,11 +99,16 @@ export const createRecord = async (req, res) => {
     return errorResponse(res, "Category ID, name, and price are required", 400);
   }
 
+  const [existing] = await runQuery("SELECT * FROM products WHERE name = ?", [name]);
+  if (existing.length > 0) { 
+    return errorResponse(res, "Product Already Exist", 409);
+  }
+
   try {
     const [result] = await runQuery(
       `INSERT INTO products 
-       (category_id, name, description, price, discount_price, qty, image, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+       (category_id, name, description, price, discount_price, qty, image)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         category_id,
         name,
@@ -110,12 +116,11 @@ export const createRecord = async (req, res) => {
         price,
         discount_price || 0,
         qty || 0,
-        image || null,
-        status ?? 1,
+        image || null
       ]
     );
 
-    return successResponse(res, "Product created successfully", { id: result.insertId });
+    return successResponse(res, "Product created successfully", { id: result.insertId, name: name, price: price });
   } catch (err) {
     console.error("Error creating product:", err);
     return errorResponse(res, "Error creating product", 500);

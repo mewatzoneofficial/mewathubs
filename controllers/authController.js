@@ -1,32 +1,115 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-import { User } from "../models/user.js";
+import {
+  runQuery,
+  successResponse,
+  errorResponse,
+} from "../utils/commonFunctions.js";
 
-dotenv.config();
+export const register = async (req, res) => {
+  console.log("req.body:", req.body);
 
-export const register = async (req, res, next) => {
+  if (!req.body) {
+    return res.status(400).json({ error: "Request body is missing" });
+  }
+
+  const { name, email, mobile, password } = req.body;
+
+  if (!name || !email || !mobile || !password) {
+    return errorResponse(
+      res,
+      "All fields (name, email, mobile, password) are required",
+      400
+    );
+  }
+
   try {
-    const { name, email, password } = req.body;
-    const existing = await User.findOne({ where: { email } });
-    if (existing) return res.status(400).json({ message: "Email already exists" });
+    const [existingUser] = await runQuery(
+      `SELECT * FROM faculity_users WHERE email = ?`,
+      [email]
+    );
 
-    const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({ name, email, password: hash });
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+    if (existingUser.length > 0) {
+      return errorResponse(res, "Email already registered", 409);
+    }
 
-    res.status(201).json({ user: { id: user.id, name, email }, token });
-  } catch (err) { next(err); }
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // 3️⃣ Insert new user into database
+    const [result] = await runQuery(
+      `INSERT INTO faculity_users (name, email, mobile, password) VALUES (?, ?, ?, ?)`,
+      [name, email, mobile, hashedPassword]
+    );
+
+    const newUserId = result.insertId;
+    return successResponse(res, "User registered successfully", {
+      FacultyID: newUserId,
+      name,
+      email,
+      mobile,
+    });
+  } catch (err) {
+    console.error("Error registering user:", err);
+    return errorResponse(res, "Error registering user", 500);
+  }
 };
 
-export const login = async (req, res, next) => {
-  try {
-    const { email, password } = req.body;
-    const user = await User.findOne({ where: { email } });
-    if (!user || !(await bcrypt.compare(password, user.password)))
-      return res.status(401).json({ message: "Invalid credentials" });
+export const login = async (req, res) => {
+  console.log("req.body:", req.body);
 
-    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "7d" });
-    res.json({ user: { id: user.id, name: user.name, email }, token });
-  } catch (err) { next(err); }
+  if (!req.body) {
+    return res.status(400).json({ error: "Request body is missing" });
+  }
+
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return errorResponse(res, "Email and password are required", 400);
+  }
+
+  try {
+    const [user] = await runQuery(
+      `SELECT faculityID, name,  email, mobile, password FROM faculity_users WHERE email = ?`,
+      [email]
+    );
+
+    if (!user || user.length === 0) {
+      return errorResponse(res, "Invalid email", 401);
+    }
+
+    const existingUser = user[0];
+
+    let hashedPassword = existingUser.password;
+    if (hashedPassword.startsWith("$2y$")) {
+      hashedPassword = hashedPassword.replace("$2y$", "$2a$");
+    }
+
+    const isMatch = await bcrypt.compare(password, hashedPassword);
+    if (!isMatch) {
+      return errorResponse(res, "Invalid email or password", 401);
+    }
+
+    const token = jwt.sign(
+      {
+        id: existingUser.faculityID,
+        name: existingUser.name,
+        email: existingUser.email,
+        mobile: existingUser.mobile,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    // 4️⃣ Respond with success
+    return successResponse(res, "User logged in successfully", {
+      FacultyID: existingUser.faculityID,
+      name: existingUser.name,
+      email: existingUser.email,
+      mobile: existingUser.mobile,
+      token,
+    });
+  } catch (err) {
+    console.error("Error logging in:", err);
+    return errorResponse(res, "Error logging in user", 500);
+  }
 };

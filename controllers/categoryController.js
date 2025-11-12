@@ -77,13 +77,18 @@ export const createRecord = async (req, res) => {
     return errorResponse(res, "Category name is required", 400);
   }
 
+  const [existing] = await runQuery("SELECT * FROM categories WHERE name = ?", [name]);
+  if (existing.length > 0) { 
+    return errorResponse(res, "Category Already Exist", 409);
+  }
+
   try {
     const [result] = await runQuery(
       `INSERT INTO categories (name, description) VALUES (?, ?)`,
       [name, description || null]
     );
 
-    return successResponse(res, "Category created successfully", { id: result.insertId });
+    return successResponse(res, "Category created successfully", { id: result.insertId, name: name });
   } catch (err) {
     console.error("Error creating category:", err);
     return errorResponse(res, "Error creating category", 500);
