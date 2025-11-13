@@ -47,7 +47,7 @@ export const getAllRecords = async (req, res) => {
 
     const responseData = results.map((product) => ({
       ...product,
-      image: product.image ? `${baseImageUrl}products/${product.image}` : null,
+      image: product.image ? `${baseImageUrl}uploads/products/${product.image}` : null,
     }));
 
     return successResponse(res, "Products fetched successfully", {
@@ -66,20 +66,32 @@ export const getAllRecords = async (req, res) => {
 // Get product by ID
 export const getRecordById = async (req, res) => {
   const { id } = req.params;
+
   if (!id || isNaN(id)) {
     return errorResponse(res, "Invalid product ID", 400);
   }
+
   try {
     const [result] = await runQuery("SELECT * FROM products WHERE id = ?", [id]);
+
     if (!result.length) {
       return errorResponse(res, "Product not found", 404);
     }
 
-    return successResponse(res, "Product fetched successfully", result[0]);
+    const baseImageUrl = process.env.IMAGE_BASE_URL;
+    const product = result[0];
+    const responseData = {
+      ...product,
+      image: product.image
+        ? `${baseImageUrl}uploads/products/${product.image}`
+        : null,
+    };
+    return successResponse(res, "Product fetched successfully", responseData);
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
 };
+
 
 // Create a new product
 export const createRecord = async (req, res) => {
