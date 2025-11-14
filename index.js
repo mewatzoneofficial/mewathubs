@@ -16,20 +16,15 @@ import productRoutes from "./routes/productRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 
-console.log("process.env.NODE_ENV", process.env.NODE_ENV)
-const envFile = process.env.NODE_ENV === "production"
-  ? ".env.production"
-  : ".env.local";
-
-dotenv.config({ path: envFile });
+dotenv.config({ path: ".env" });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === "production";
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 
-// 🧠 Use clustering only in production
+// 🧠 Cluster only in production
 if (cluster.isPrimary && isProduction) {
   const numCPUs = os.cpus().length;
   console.log(`🧠 Master ${process.pid} running`);
@@ -41,14 +36,16 @@ if (cluster.isPrimary && isProduction) {
     console.log(`💀 Worker ${worker.process.pid} died. Restarting...`);
     cluster.fork();
   });
-} else {
-  const app = express();
 
+} else {
+
+  const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
   app.use(helmet());
+  // Rate limiter
   app.use(
     rateLimit({
       windowMs: 15 * 60 * 1000,
@@ -58,21 +55,23 @@ if (cluster.isPrimary && isProduction) {
     })
   );
 
-  // Production CORS
+  // CORS
   const corsOptions = isProduction
-    ? { origin: process.env.CLIENT_URL }
+    ? {
+        origin: process.env.CLIENT_URL?.split(",") || [],
+        credentials: true,
+      }
     : {};
 
   app.use(cors(corsOptions));
-
-  // Logging
   app.use(morgan(isProduction ? "combined" : "dev"));
 
-  // Routes
+  // Health check
   app.get("/", (req, res) => {
     res.send(`✅ API running in ${process.env.NODE_ENV} mode...`);
   });
 
+  // API Routes
   app.use("/api/auth", authRoutes);
   app.use("/api/users", userRoutes);
   app.use("/api/categories", categoryRoutes);
@@ -90,15 +89,16 @@ if (cluster.isPrimary && isProduction) {
     });
   });
 
-  // Graceful Shutdown
+  // Graceful shutdown
   process.on("SIGTERM", () => {
     console.log("🛑 SIGTERM received. Shutting down...");
     process.exit(0);
   });
 
+  // Server start
   app.listen(PORT, "0.0.0.0", () => {
-  console.log(
-    `🚀 ${isProduction ? "Worker" : "Dev Server"} ${process.pid} → Running on port ${PORT}`
-  );
-});
+    console.log(
+      `🚀 ${isProduction ? "Worker" : "Dev Server"} ${process.pid} → Running on port ${PORT}`
+    );
+  });
 }
