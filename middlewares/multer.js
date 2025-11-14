@@ -7,13 +7,10 @@ import { dirname } from "path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Base uploads folder — created at server start
 const baseUploadPath = path.join(__dirname, "../uploads");
 if (!fs.existsSync(baseUploadPath)) {
   fs.mkdirSync(baseUploadPath, { recursive: true });
   console.log("📁 Created base uploads folder");
-} else {
-  console.log("✅ Base uploads folder already exists");
 }
 
 
