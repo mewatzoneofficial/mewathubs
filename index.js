@@ -96,9 +96,9 @@ if (cluster.isPrimary && isProduction) {
     process.exit(0);
   });
 
-  app.listen(PORT, () => {
-    console.log(
-      `🚀 ${isProduction ? "Worker" : "Dev Server"} ${process.pid} → http://localhost:${PORT}`
-    );
-  });
+  app.listen(PORT, "0.0.0.0", () => {
+  console.log(
+    `🚀 ${isProduction ? "Worker" : "Dev Server"} ${process.pid} → Running on port ${PORT}`
+  );
+});
 }
