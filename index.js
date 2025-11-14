@@ -16,7 +16,7 @@ import productRoutes from "./routes/productRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 
-// 🌐 Load correct ENV file based on NODE_ENV
+console.log("process.env.NODE_ENV", process.env.NODE_ENV)
 const envFile = process.env.NODE_ENV === "production"
   ? ".env.production"
   : ".env.local";
