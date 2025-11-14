@@ -14,7 +14,7 @@ const fileUpload = makeUploader("users");
 router.get("/", getAllRecords);
 router.post("/", fileUpload.single("image"), createRecord);
 router.get("/:id", getRecordById);
-router.put("/:id", updateRecord);
+router.put("/:id", updateRecord);   
 router.delete("/:id", deleteRecord);
 
 export default router;
