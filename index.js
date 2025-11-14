@@ -16,15 +16,20 @@ import productRoutes from "./routes/productRoutes.js";
 import cartRoutes from "./routes/cartRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 
-dotenv.config();
+// 🌐 Load correct ENV file based on NODE_ENV
+const envFile = process.env.NODE_ENV === "production"
+  ? ".env.production"
+  : ".env.local";
 
-// 🧩 ESM path fix
+dotenv.config({ path: envFile });
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const isProduction = process.env.NODE_ENV === "production";
 const PORT = process.env.PORT || 5000;
 
+// 🧠 Use clustering only in production
 if (cluster.isPrimary && isProduction) {
   const numCPUs = os.cpus().length;
   console.log(`🧠 Master ${process.pid} running`);
@@ -39,36 +44,33 @@ if (cluster.isPrimary && isProduction) {
 } else {
   const app = express();
 
-  // 🧱 Middleware
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-  // 🛡️ Security & performance
   app.use(helmet());
   app.use(
     rateLimit({
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP
+      windowMs: 15 * 60 * 1000,
+      max: 100,
       standardHeaders: true,
       legacyHeaders: false,
     })
   );
 
-  // 🌐 CORS
+  // Production CORS
   const corsOptions = isProduction
-    ? { origin: process.env.CLIENT_URL || "http://localhost:3000" }
+    ? { origin: process.env.CLIENT_URL }
     : {};
+
   app.use(cors(corsOptions));
 
-  // 🧾 Logging
+  // Logging
   app.use(morgan(isProduction ? "combined" : "dev"));
 
-  // 🧭 Routes
+  // Routes
   app.get("/", (req, res) => {
-    res.send(
-      `✅ API running in ${process.env.NODE_ENV || "development"} mode...`
-    );
+    res.send(`✅ API running in ${process.env.NODE_ENV} mode...`);
   });
 
   app.use("/api/auth", authRoutes);
@@ -78,7 +80,7 @@ if (cluster.isPrimary && isProduction) {
   app.use("/api/carts", cartRoutes);
   app.use("/api/orders", orderRoutes);
 
-  // ❗ Error Handler
+  // Error Handler
   app.use((err, req, res, next) => {
     console.error("🔥 Error:", err.stack);
     res.status(500).json({
@@ -88,16 +90,15 @@ if (cluster.isPrimary && isProduction) {
     });
   });
 
-  // 🛑 Graceful Shutdown
+  // Graceful Shutdown
   process.on("SIGTERM", () => {
     console.log("🛑 SIGTERM received. Shutting down...");
     process.exit(0);
   });
 
-  // 🚀 Start Server
   app.listen(PORT, () => {
     console.log(
-      `🚀 ${isProduction ? "Worker" : "Dev Server"} ${process.pid} running → http://localhost:${PORT}`
+      `🚀 ${isProduction ? "Worker" : "Dev Server"} ${process.pid} → http://localhost:${PORT}`
     );
   });
 }
