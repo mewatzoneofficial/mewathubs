@@ -101,8 +101,7 @@ export const createRecord = async (req, res) => {
     description,
     price,
     discount_price,
-    qty,
-    status,
+    qty
   } = req.body;
 
   const image = req.file ? req.file.filename : null;
@@ -148,9 +147,8 @@ export const updateRecord = async (req, res) => {
     description,
     price,
     discount_price,
-    qty,
-    status,
-  } = req.body;
+    qty
+  } = req.body || {};
   const image = req.file ? req.file.filename : null;
 
   if (!id || isNaN(id)) {
@@ -172,7 +170,6 @@ export const updateRecord = async (req, res) => {
         discount_price = ?, 
         qty = ?, 
         image = COALESCE(?, image), 
-        status = ?, 
         updated_at = NOW()
       WHERE id = ?`,
       [
@@ -183,7 +180,6 @@ export const updateRecord = async (req, res) => {
         discount_price || 0,
         qty || 0,
         image,
-        status ?? existing[0].status,
         id,
       ]
     );
@@ -191,8 +187,7 @@ export const updateRecord = async (req, res) => {
     if (result.affectedRows === 0) {
       return errorResponse(res, "No changes made to the product", 400);
     }
-
-    return successResponse(res, "Product updated successfully");
+    return successResponse(res, "Product updated successfully", { id: id, name: name, price: price });
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }

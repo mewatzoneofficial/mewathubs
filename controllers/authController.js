@@ -7,8 +7,6 @@ import {
 } from "../utils/commonFunctions.js";
 
 export const register = async (req, res) => {
-  console.log("req.body:", req.body);
-
   if (!req.body) {
     return res.status(400).json({ error: "Request body is missing" });
   }
@@ -56,8 +54,6 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  console.log("req.body:", req.body);
-
   if (!req.body) {
     return res.status(400).json({ error: "Request body is missing" });
   }

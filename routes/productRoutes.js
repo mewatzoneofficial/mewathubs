@@ -14,7 +14,7 @@ const upload = makeUploader("products");
 router.get("/", getAllRecords);
 router.post("/", upload.single("image"), createRecord);
 router.get("/:id", getRecordById);
-router.put("/:id", updateRecord);
+router.put("/:id", upload.single("image"), updateRecord);
 router.delete("/:id", deleteRecord);
 
 export default router;
