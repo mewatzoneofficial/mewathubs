@@ -1,11 +1,7 @@
-import bcrypt from "bcrypt";
-import {
-  runQuery,
-  successResponse,
-  errorResponse,
-} from "../utils/commonFunctions.js";
+import { runQuery, successResponse, errorResponse } from "../utils/commonFunctions.js";
+import bcrypt from "bcryptjs";
 
-// Get all admins
+// Get all users
 export const getAllRecords = async (req, res) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
@@ -16,10 +12,9 @@ export const getAllRecords = async (req, res) => {
     const filters = {
       name: trimOrNull(req.query.name),
       email: trimOrNull(req.query.email),
-      mobile: trimOrNull(req.query.mobile),
+      phone: trimOrNull(req.query.phone)
     };
 
-    // Build WHERE clause dynamically
     const whereClauses = [];
     const params = [];
 
@@ -29,40 +24,45 @@ export const getAllRecords = async (req, res) => {
     }
 
     if (filters.email) {
-      whereClauses.push("(email LIKE ? OR official_email LIKE ?)");
-      params.push(`%${filters.email}%`, `%${filters.email}%`);
+      whereClauses.push("email LIKE ?");
+      params.push(`%${filters.email}%`);
     }
 
-    if (filters.mobile) {
-      whereClauses.push("(mobile LIKE ? OR official_mobile LIKE ?)");
-      params.push(`%${filters.mobile}%`, `%${filters.mobile}%`);
+    if (filters.phone) {
+      whereClauses.push("phone LIKE ?");
+      params.push(`%${filters.phone}%`);
     }
 
-    const whereClause = whereClauses.length
-      ? "WHERE " + whereClauses.join(" AND ")
-      : "";
+    const whereClause = whereClauses.length ? "WHERE " + whereClauses.join(" AND ") : "";
+
     const sqlQuery = `
-      SELECT adminID, name, mobile, email, official_email, official_mobile, image, dob, joining_date,
-       gender, created_at FROM admin
+      SELECT id, name, email, phone, password, image, description, age, gender, latitude, longitude 
+      FROM users
       ${whereClause}
-      ORDER BY adminID DESC LIMIT ? OFFSET ?`;
+      ORDER BY id DESC
+      LIMIT ? OFFSET ?;
+    `;
 
     const [results] = await runQuery(sqlQuery, [...params, limit, offset]);
 
-    // Get total count
-    const countQuery = `SELECT COUNT(*) AS total FROM admin ${whereClause}`;
+    const countQuery = `SELECT COUNT(*) AS total FROM users ${whereClause}`;
     const countResult = await runQuery(countQuery, params);
-    const countRow = Array.isArray(countResult[0])
-      ? countResult[0][0]
-      : countResult[0];
+    const countRow = Array.isArray(countResult[0]) ? countResult[0][0] : countResult[0];
     const total = countRow?.total || 0;
 
-    return successResponse(res, "Data fetched successfully", {
+    const baseImageUrl = process.env.IMAGE_BASE_URL;
+
+    const responseData = results.map((user) => ({
+      ...user,
+      image: user.image ? `${baseImageUrl}uploads/users/${user.image}` : null,
+    }));
+
+    return successResponse(res, "Users fetched successfully", {
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      results,
+      responseData,
     });
   } catch (err) {
     console.error(err);
@@ -70,140 +70,178 @@ export const getAllRecords = async (req, res) => {
   }
 };
 
-// Get admin by ID
+
+// Get user by ID
 export const getRecordById = async (req, res) => {
   const { id } = req.params;
+
   if (!id || isNaN(id)) {
-    return errorResponse(res, "Invalid admin ID", 400);
+    return errorResponse(res, "Invalid user ID", 400);
   }
+
   try {
-    const result = await runQuery("SELECT * FROM admin WHERE adminID = ?", [
-      id,
-    ]);
-    if (result.length === 0) {
+    const [result] = await runQuery("SELECT * FROM users WHERE id = ?", [id]);
+
+    if (!result.length) {
       return errorResponse(res, "User not found", 404);
     }
 
-    return successResponse(res, "Data fetched successfully", result[0]);
+    const baseImageUrl = process.env.IMAGE_BASE_URL;
+    const user = result[0];
+
+    const responseData = {
+      ...user,
+      image: user.image
+        ? `${baseImageUrl}uploads/users/${user.image}`
+        : null,
+    };
+    return successResponse(res, "User fetched successfully", responseData);
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
 };
 
+
+// Create a new user
 export const createRecord = async (req, res) => {
-  console.log("req.body:", req.body);
-  // Ensure req.body exists
-  if (!req.body) {
-    return res.status(400).json({ error: "Request body is missing" });
-  }
   const {
     name,
-    mobile,
     email,
-    official_email,
-    official_mobile,
+    phone,
     password,
-    dob,
-    joining_date,
+    description,
+    age,
     gender,
+    latitude,
+    longitude
   } = req.body;
-  // Uploaded image is in req.file
+
   const image = req.file ? req.file.filename : null;
-  if (!name || !email || !mobile || !password) {
-    return errorResponse(
-      res,
-      "Name, email, mobile, and password are required",
-      400
-    );
+
+  if (!name || !email || !password) {
+    return errorResponse(res, "Name, email, and password are required", 400);
+  }
+
+  const [existing] = await runQuery("SELECT * FROM users WHERE email = ?", [email]);
+  if (existing.length > 0) { 
+    return errorResponse(res, "User already exists", 409);
   }
 
   try {
-    // ✅ Check if email or mobile already exists
-    // const existing = await runQuery(
-    //   "SELECT adminID FROM admin WHERE email = ? OR mobile = ?",
-    //   [email, mobile]
-    // );
-
-    // if (existing.length > 0) {
-    //   return errorResponse(res, "Email or mobile already exists", 400);
-    // }
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const [result] = await runQuery(
-      `INSERT INTO admin 
-       (name, email, mobile, password, official_email, official_mobile, dob, joining_date, gender, image)
+      `INSERT INTO users 
+       (name, email, phone, password, image, description, age, gender, latitude, longitude)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         name,
         email,
-        mobile,
+        phone || null,
         hashedPassword,
-        official_email || null,
-        official_mobile || null,
-        dob || null,
-        joining_date || null,
-        gender || null,
         image || null,
+        description || null,
+        age || null,
+        gender || null,
+        latitude || null,
+        longitude || null
       ]
     );
 
-    return successResponse(res, "Admin created successfully", {
-      adminID: result.insertId,
-    });
+    return successResponse(res, "User created successfully", { id: result.insertId, name, email });
   } catch (err) {
-    console.error("Error creating admin:", err);
-    return errorResponse(res, "Error creating admin", 500);
+    console.error("Error creating user:", err);
+    return errorResponse(res, "Error creating user", 500);
   }
 };
 
-// Update admin by ID
+
+// Update user by ID
 export const updateRecord = async (req, res) => {
   const { id } = req.params;
-  const { name, email, mobile } = req.body;
+  const {
+    name,
+    email,
+    phone,
+    password,
+    description,
+    age,
+    gender,
+    latitude,
+    longitude
+  } = req.body || {};
 
-  if (!name || !email || !mobile) {
-    return errorResponse(
-      res,
-      "Name, email, and mobile are required to update",
-      400
-    );
+  const image = req.file ? req.file.filename : null;
+
+  if (!id || isNaN(id)) {
+    return errorResponse(res, "Invalid user ID", 400);
   }
 
   try {
-    const result = await runQuery(
-      "UPDATE admin SET name = ?, email = ?, mobile = ? WHERE adminID = ?",
-      [name, email, mobile, id]
+    const [existing] = await runQuery("SELECT * FROM users WHERE id = ?", [id]);
+    if (!existing.length) {
+      return errorResponse(res, "User not found", 404);
+    }
+
+    let finalPassword = existing[0].password;
+
+    if (password) {
+      finalPassword = await bcrypt.hash(password, 10);
+    }
+
+    const [result] = await runQuery(
+      `UPDATE users SET 
+        name = ?, 
+        email = ?, 
+        phone = ?, 
+        password = ?, 
+        image = COALESCE(?, image), 
+        description = ?, 
+        age = ?, 
+        gender = ?, 
+        latitude = ?, 
+        longitude = ?, 
+        updated_at = NOW()
+      WHERE id = ?`,
+      [
+        name,
+        email,
+        phone,
+        finalPassword,
+        image,
+        description,
+        age,
+        gender,
+        latitude,
+        longitude,
+        id,
+      ]
     );
 
     if (result.affectedRows === 0) {
-      return errorResponse(res, "Admin not found", 404);
+      return errorResponse(res, "No changes made to the user", 400);
     }
-
-    return successResponse(res, "User Updated successfully", {
-      id,
-      name,
-      email,
-      mobile,
-    });
+    return successResponse(res, "User updated successfully", { id, name, email });
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
 };
 
-// Delete admin by ID
+
+// Delete user by ID
 export const deleteRecord = async (req, res) => {
   const { id } = req.params;
-  console.log("Deleting admin with ID:", id);
+  if (!id || isNaN(id)) {
+    return errorResponse(res, "Invalid user ID", 400);
+  }
 
   try {
-    const result = await runQuery("DELETE FROM admin WHERE adminID = ?", [id]);
-
+    const [result] = await runQuery("DELETE FROM users WHERE id = ?", [id]);
     if (result.affectedRows === 0) {
-      return errorResponse(res, "Admin not found", 404);
+      return errorResponse(res, "User not found", 404);
     }
 
-    return successResponse(res, { message: "User deleted successfully" });
+    return successResponse(res, "User deleted successfully");
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
