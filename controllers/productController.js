@@ -1,4 +1,8 @@
-import { runQuery, successResponse, errorResponse } from "../utils/commonFunctions.js";
+import {
+  runQuery,
+  successResponse,
+  errorResponse,
+} from "../utils/commonFunctions.js";
 
 // Get all products
 export const getAllRecords = async (req, res) => {
@@ -10,7 +14,9 @@ export const getAllRecords = async (req, res) => {
 
     const filters = {
       name: trimOrNull(req.query.name),
-      category_id: req.query.category_id ? parseInt(req.query.category_id, 10) : null,
+      category_id: req.query.category_id
+        ? parseInt(req.query.category_id, 10)
+        : null,
       status: req.query.status ? parseInt(req.query.status, 10) : null,
     };
 
@@ -27,10 +33,14 @@ export const getAllRecords = async (req, res) => {
       params.push(filters.category_id);
     }
 
-    const whereClause = whereClauses.length ? "WHERE " + whereClauses.join(" AND ") : "";
+    const whereClause = whereClauses.length
+      ? "WHERE " + whereClauses.join(" AND ")
+      : "";
 
     const sqlQuery = `
-      SELECT id, category_id, name, description, price, discount_price, qty, image FROM products
+      SELECT products.id, products.category_id, products.name, products.description, products.price, products.discount_price,
+       products.qty, products.image, products.created_at, categories.name as cat_name FROM products
+      JOIN categories ON products.category_id = categories.id
       ${whereClause}
       ORDER BY id DESC
       LIMIT ? OFFSET ?;
@@ -40,14 +50,18 @@ export const getAllRecords = async (req, res) => {
 
     const countQuery = `SELECT COUNT(*) AS total FROM products ${whereClause}`;
     const countResult = await runQuery(countQuery, params);
-    const countRow = Array.isArray(countResult[0]) ? countResult[0][0] : countResult[0];
+    const countRow = Array.isArray(countResult[0])
+      ? countResult[0][0]
+      : countResult[0];
     const total = countRow?.total || 0;
 
     const baseImageUrl = process.env.IMAGE_BASE_URL;
 
     const responseData = results.map((product) => ({
       ...product,
-      image: product.image ? `${baseImageUrl}uploads/products/${product.image}` : null,
+      image: product.image
+        ? `${baseImageUrl}uploads/products/${product.image}`
+        : null,
     }));
 
     return successResponse(res, "Products fetched successfully", {
@@ -72,7 +86,9 @@ export const getRecordById = async (req, res) => {
   }
 
   try {
-    const [result] = await runQuery("SELECT * FROM products WHERE id = ?", [id]);
+    const [result] = await runQuery("SELECT * FROM products WHERE id = ?", [
+      id,
+    ]);
 
     if (!result.length) {
       return errorResponse(res, "Product not found", 404);
@@ -92,17 +108,10 @@ export const getRecordById = async (req, res) => {
   }
 };
 
-
 // Create a new product
 export const createRecord = async (req, res) => {
-  const {
-    category_id,
-    name,
-    description,
-    price,
-    discount_price,
-    qty
-  } = req.body;
+  const { category_id, name, description, price, discount_price, qty } =
+    req.body;
 
   const image = req.file ? req.file.filename : null;
 
@@ -110,8 +119,10 @@ export const createRecord = async (req, res) => {
     return errorResponse(res, "Category ID, name, and price are required", 400);
   }
 
-  const [existing] = await runQuery("SELECT * FROM products WHERE name = ?", [name]);
-  if (existing.length > 0) { 
+  const [existing] = await runQuery("SELECT * FROM products WHERE name = ?", [
+    name,
+  ]);
+  if (existing.length > 0) {
     return errorResponse(res, "Product Already Exist", 409);
   }
 
@@ -127,11 +138,15 @@ export const createRecord = async (req, res) => {
         price,
         discount_price || 0,
         qty || 0,
-        image || null
+        image || null,
       ]
     );
 
-    return successResponse(res, "Product created successfully", { id: result.insertId, name: name, price: price });
+    return successResponse(res, "Product created successfully", {
+      id: result.insertId,
+      name: name,
+      price: price,
+    });
   } catch (err) {
     console.error("Error creating product:", err);
     return errorResponse(res, "Error creating product", 500);
@@ -141,14 +156,8 @@ export const createRecord = async (req, res) => {
 // Update product by ID
 export const updateRecord = async (req, res) => {
   const { id } = req.params;
-  const {
-    category_id,
-    name,
-    description,
-    price,
-    discount_price,
-    qty
-  } = req.body || {};
+  const { category_id, name, description, price, discount_price, qty } =
+    req.body || {};
   const image = req.file ? req.file.filename : null;
 
   if (!id || isNaN(id)) {
@@ -156,7 +165,9 @@ export const updateRecord = async (req, res) => {
   }
 
   try {
-    const [existing] = await runQuery("SELECT * FROM products WHERE id = ?", [id]);
+    const [existing] = await runQuery("SELECT * FROM products WHERE id = ?", [
+      id,
+    ]);
     if (!existing.length) {
       return errorResponse(res, "Product not found", 404);
     }
@@ -187,7 +198,11 @@ export const updateRecord = async (req, res) => {
     if (result.affectedRows === 0) {
       return errorResponse(res, "No changes made to the product", 400);
     }
-    return successResponse(res, "Product updated successfully", { id: id, name: name, price: price });
+    return successResponse(res, "Product updated successfully", {
+      id: id,
+      name: name,
+      price: price,
+    });
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }

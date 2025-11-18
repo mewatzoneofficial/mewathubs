@@ -46,14 +46,14 @@ if (cluster.isPrimary && isProduction) {
 
   app.use(helmet());
   // Rate limiter
-  app.use(
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      max: 100,
-      standardHeaders: true,
-      legacyHeaders: false,
-    })
-  );
+  // app.use(
+  //   rateLimit({
+  //     windowMs: 60 * 60 * 1000,
+  //     max: 100,
+  //     standardHeaders: true,
+  //     legacyHeaders: false,
+  //   })
+  // );
 
   // CORS
   const corsOptions = isProduction
