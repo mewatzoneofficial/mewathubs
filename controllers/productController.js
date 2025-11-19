@@ -14,10 +14,10 @@ export const getAllRecords = async (req, res) => {
 
     const filters = {
       name: trimOrNull(req.query.name),
+      price: trimOrNull(req.query.price),
       category_id: req.query.category_id
         ? parseInt(req.query.category_id, 10)
         : null,
-      status: req.query.status ? parseInt(req.query.status, 10) : null,
     };
 
     const whereClauses = [];
@@ -26,6 +26,11 @@ export const getAllRecords = async (req, res) => {
     if (filters.name) {
       whereClauses.push("name LIKE ?");
       params.push(`%${filters.name}%`);
+    }
+
+    if (filters.price) {
+      whereClauses.push("price LIKE ?");
+      params.push(`%${filters.price}%`);
     }
 
     if (filters.category_id) {
@@ -39,16 +44,26 @@ export const getAllRecords = async (req, res) => {
 
     const sqlQuery = `
       SELECT products.id, products.category_id, products.name, products.description, products.price, products.discount_price,
-       products.qty, products.image, products.created_at, categories.name as cat_name FROM products
-      JOIN categories ON products.category_id = categories.id
-      ${whereClause}
-      ORDER BY id DESC
-      LIMIT ? OFFSET ?;
+             products.qty, products.image, products.created_at, categories.name as cat_name 
+        FROM products
+        JOIN categories ON products.category_id = categories.id
+        ${whereClause}
+        ORDER BY id DESC
+        LIMIT ? OFFSET ?;
     `;
 
     const [results] = await runQuery(sqlQuery, [...params, limit, offset]);
 
-    const countQuery = `SELECT COUNT(*) AS total FROM products ${whereClause}`;
+    // Ensure results is never null, default to empty array
+    const products = Array.isArray(results) ? results : [];
+
+     // Corrected COUNT query with JOIN
+    const countQuery = `
+      SELECT COUNT(*) AS total 
+        FROM products
+        LEFT JOIN categories ON products.category_id = categories.id
+        ${whereClause}
+    `;
     const countResult = await runQuery(countQuery, params);
     const countRow = Array.isArray(countResult[0])
       ? countResult[0][0]
@@ -57,11 +72,9 @@ export const getAllRecords = async (req, res) => {
 
     const baseImageUrl = process.env.IMAGE_BASE_URL;
 
-    const responseData = results.map((product) => ({
+    const responseData = products.map((product) => ({
       ...product,
-      image: product.image
-        ? `${baseImageUrl}products/${product.image}`
-        : null,
+      image: product.image ? `${baseImageUrl}products/${product.image}` : null,
     }));
 
     return successResponse(res, "Products fetched successfully", {
@@ -98,9 +111,7 @@ export const getRecordById = async (req, res) => {
     const product = result[0];
     const responseData = {
       ...product,
-      image: product.image
-        ? `${baseImageUrl}products/${product.image}`
-        : null,
+      image: product.image ? `${baseImageUrl}products/${product.image}` : null,
     };
     return successResponse(res, "Product fetched successfully", responseData);
   } catch (err) {

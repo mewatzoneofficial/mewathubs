@@ -98,10 +98,14 @@ export const createRecord = async (req, res) => {
 // Update category by ID
 export const updateRecord = async (req, res) => {
   const { id } = req.params;
-  const { name, description } = req.body;
+  const { name, description } = req.body || {}; 
+  console.log('req.body', req.body)
 
   if (!id || isNaN(id)) {
     return errorResponse(res, "Invalid category ID", 400);
+  }
+  if (!name) {
+    return errorResponse(res, "Category name is required", 400);
   }
 
   try {
@@ -121,7 +125,7 @@ export const updateRecord = async (req, res) => {
       return errorResponse(res, "No changes made to the category", 400);
     }
 
-    return successResponse(res, "Category updated successfully");
+    return successResponse(res, "Category updated successfully", { id: id, name: name, description:description });
   } catch (err) {
     return errorResponse(res, err.message, 500);
   }
