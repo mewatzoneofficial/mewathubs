@@ -60,7 +60,7 @@ export const getAllRecords = async (req, res) => {
     const responseData = results.map((product) => ({
       ...product,
       image: product.image
-        ? `${baseImageUrl}uploads/products/${product.image}`
+        ? `${baseImageUrl}products/${product.image}`
         : null,
     }));
 
@@ -99,7 +99,7 @@ export const getRecordById = async (req, res) => {
     const responseData = {
       ...product,
       image: product.image
-        ? `${baseImageUrl}uploads/products/${product.image}`
+        ? `${baseImageUrl}products/${product.image}`
         : null,
     };
     return successResponse(res, "Product fetched successfully", responseData);
