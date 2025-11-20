@@ -24,19 +24,20 @@ export const getAllRecords = async (req, res) => {
     const params = [];
 
     if (filters.name) {
-      whereClauses.push("name LIKE ?");
+      whereClauses.push("products.name LIKE ?");
       params.push(`%${filters.name}%`);
     }
 
     if (filters.price) {
-      whereClauses.push("price LIKE ?");
+      whereClauses.push("products.price LIKE ?");
       params.push(`%${filters.price}%`);
     }
 
     if (filters.category_id) {
-      whereClauses.push("category_id = ?");
+      whereClauses.push("products.category_id = ?");
       params.push(filters.category_id);
     }
+
 
     const whereClause = whereClauses.length
       ? "WHERE " + whereClauses.join(" AND ")

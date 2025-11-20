@@ -1,3 +1,4 @@
+import connectDB from "../config/mdb.js";
 import { runQuery, successResponse, errorResponse } from "../utils/commonFunctions.js";
 
 // Get all categories
@@ -46,6 +47,24 @@ export const getAllRecords = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
+    return errorResponse(res, err.message, 500);
+  }
+};
+
+
+export const getRecords = async (req, res) => {
+  try {
+      const db = await connectDB();
+      // const collection = await db.createCollection("users");
+      const result = await db.collection("users").find().toArray();
+    // const [result] = await runQuery("SELECT * FROM categories WHERE id = ?", [id]);
+    console.log('result', result)
+    if (!result.length) {
+      return errorResponse(res, "Category not found", 404);
+    }
+
+    return successResponse(res, "Category fetched successfully", result[0]);
+  } catch (err) {
     return errorResponse(res, err.message, 500);
   }
 };
